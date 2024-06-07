@@ -1,9 +1,9 @@
-package go_dive
+package dive
 
 import (
 	"context"
 
-	diveContracts "github.com/pavel-krush/dive/api/go/v1"
+	diveContracts "github.com/pavel-krush/go-dive/api/go/v1"
 )
 
 type GrpcServer struct {

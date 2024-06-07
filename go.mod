@@ -1,4 +1,4 @@
-module github.com/pavel-krush/dive
+module github.com/pavel-krush/go-dive
 
 go 1.22.3
 

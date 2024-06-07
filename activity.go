@@ -1,4 +1,4 @@
-package go_dive
+package dive
 
 import (
 	"sync"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	diveContracts "github.com/pavel-krush/dive/api/go/v1"
+	diveContracts "github.com/pavel-krush/go-dive/api/go/v1"
 )
 
 type Type int
