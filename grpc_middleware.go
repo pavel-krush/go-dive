@@ -22,7 +22,7 @@ func ActivityFromContext(ctx context.Context) *Activity {
 	return a
 }
 
-func UnaryServerDiveInterceptor(master *Master) grpc.UnaryServerInterceptor {
+func UnaryServerInterceptor(master *Master) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if master == nil {
 			return handler(ctx, req)
@@ -34,6 +34,36 @@ func UnaryServerDiveInterceptor(master *Master) grpc.UnaryServerInterceptor {
 		master.AddActivity(activity.id.String(), activity)
 		defer master.RemoveActivity(activity.id.String())
 		return handler(ctx, req)
+	}
+}
+
+type wrappedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedStream) Context() context.Context {
+	return w.ctx
+}
+
+func StreamServerInterceptor(master *Master) grpc.StreamServerInterceptor {
+	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if master == nil {
+			return handler(srv, stream)
+		}
+
+		service, method := splitFullMethod(info.FullMethod)
+		activity := NewStreamGrpcActivity(service, method, nil)
+		ctx := ActivityToContext(stream.Context(), activity)
+		master.AddActivity(activity.id.String(), activity)
+		defer master.RemoveActivity(activity.id.String())
+
+		ss := &wrappedStream{
+			ServerStream: stream,
+			ctx:          ctx,
+		}
+
+		return handler(srv, ss)
 	}
 }
 
