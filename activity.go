@@ -44,8 +44,19 @@ func newActivity(t Type, req any) *Activity {
 	}
 }
 
+func NewBackgroundActivity(req any) *Activity {
+	return newActivity(ActivityTypeBackground, req)
+}
+
 func NewUnaryGrpcActivity(service string, method string, req any) *Activity {
 	ret := newActivity(ActivityTypeGrpcUnary, req)
+	ret.grpcService = service
+	ret.grpcMethod = method
+	return ret
+}
+
+func NewStreamGrpcActivity(service string, method string, req any) *Activity {
+	ret := newActivity(ActivityTypeGrpcStream, req)
 	ret.grpcService = service
 	ret.grpcMethod = method
 	return ret
