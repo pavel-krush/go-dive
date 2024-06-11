@@ -5,7 +5,6 @@ package dive.v1;
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
-import "google/protobuf/struct.proto";
 import "google/api/annotations.proto";
 
 option go_package = "github.com/pavel-krush/dive/api/go/v1;diveContracts";
@@ -21,22 +20,19 @@ message DiveRequest {
 }
 
 message Activity {
-  enum Type {
-    TYPE_UNKNOWN = 0;
-    TYPE_BACKGROUND = 1;
-    TYPE_GRPC_UNARY = 2;
-    TYPE_GRPC_STREAM = 3;
+  string id = 1;
+  google.protobuf.Timestamp started_at = 2;
+  google.protobuf.Duration duration = 3;
+  google.protobuf.Any request = 4;
+  map<string, string> props = 5;
+
+  message Event {
+    string name = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    map<string, string> props = 3;
   }
 
-  Type type = 1;
-  string id = 2;
-  google.protobuf.Timestamp started_at = 3;
-  google.protobuf.Duration duration = 4;
-  google.protobuf.Any request = 5;
-  google.protobuf.Struct props = 6;
-
-  string grpc_service = 7;
-  string grpc_method = 8;
+  repeated Event events = 6;
 }
 
 message DiveResponse {

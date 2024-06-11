@@ -31,8 +31,8 @@ func UnaryServerInterceptor(master *Master) grpc.UnaryServerInterceptor {
 		service, method := splitFullMethod(info.FullMethod)
 		activity := NewUnaryGrpcActivity(service, method, req)
 		ctx = ActivityToContext(ctx, activity)
-		master.AddActivity(activity.id.String(), activity)
-		defer master.RemoveActivity(activity.id.String())
+		master.AddActivity(activity.id, activity)
+		defer master.RemoveActivity(activity.id)
 		return handler(ctx, req)
 	}
 }
@@ -53,10 +53,11 @@ func StreamServerInterceptor(master *Master) grpc.StreamServerInterceptor {
 		}
 
 		service, method := splitFullMethod(info.FullMethod)
+
 		activity := NewStreamGrpcActivity(service, method, nil)
 		ctx := ActivityToContext(stream.Context(), activity)
-		master.AddActivity(activity.id.String(), activity)
-		defer master.RemoveActivity(activity.id.String())
+		master.AddActivity(activity.id, activity)
+		defer master.RemoveActivity(activity.id)
 
 		ss := &wrappedStream{
 			ServerStream: stream,

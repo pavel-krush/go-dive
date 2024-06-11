@@ -18,7 +18,7 @@ func NewGrpcServer(master *Master) *GrpcServer {
 func (s *GrpcServer) Dive(ctx context.Context, req *diveContracts.DiveRequest) (*diveContracts.DiveResponse, error) {
 	resp := &diveContracts.DiveResponse{}
 	s.master.WalkActivities(func(a *Activity) {
-		resp.Activities = append(resp.Activities, a.ToProto())
+		resp.Activities = append(resp.Activities, ActivityToProto(a))
 	})
 	return resp, nil
 }

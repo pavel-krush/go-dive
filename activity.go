@@ -1,68 +1,72 @@
 package dive
 
 import (
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	diveContracts "github.com/pavel-krush/go-dive/api/go/v1"
-)
-
-type Type int
-
-const (
-	ActivityTypeUnknown Type = iota
-	ActivityTypeBackground
-	ActivityTypeGrpcUnary
-	ActivityTypeGrpcStream
 )
 
 type Activity struct {
-	mu          sync.RWMutex
-	id          uuid.UUID
-	t           Type
-	startedAt   time.Time
-	req         any
-	props       map[string]any
-	grpcService string
-	grpcMethod  string
+	mu        sync.RWMutex
+	id        string
+	startedAt time.Time
+	req       any
+	props     map[string]string
+	events    Events
 }
 
-func newActivity(t Type, req any) *Activity {
+type Events []Event
+
+type Event struct {
+	name      string
+	timestamp time.Time
+	payload   map[string]string
+}
+
+const (
+	PropBackgroundJobID = "bg_job_id"
+	PropGrpcType        = "grpc_type"
+	PropGrpcTypeUnary   = "unary"
+	PropGrpcTypeStream  = "stream"
+	PropGrpcService     = "grpc_service"
+	PropGrpcMethod      = "grpc_method"
+)
+
+func newActivity(req any) *Activity {
 	return &Activity{
-		id:        uuid.New(),
-		t:         t,
+		id:        uuid.New().String(),
 		startedAt: time.Now(),
 		req:       req,
-		props:     make(map[string]any),
+		props:     make(map[string]string),
 	}
 }
 
-func NewBackgroundActivity(req any) *Activity {
-	return newActivity(ActivityTypeBackground, req)
+func NewBackgroundActivity(req any, jobID string) *Activity {
+	ret := newActivity(req)
+	ret.props[PropBackgroundJobID] = jobID
+	return ret
 }
 
 func NewUnaryGrpcActivity(service string, method string, req any) *Activity {
-	ret := newActivity(ActivityTypeGrpcUnary, req)
-	ret.grpcService = service
-	ret.grpcMethod = method
+	ret := newActivity(req)
+	ret.SetProp(PropGrpcType, PropGrpcTypeUnary)
+	ret.SetProp(PropGrpcService, service)
+	ret.SetProp(PropGrpcMethod, method)
 	return ret
 }
 
 func NewStreamGrpcActivity(service string, method string, req any) *Activity {
-	ret := newActivity(ActivityTypeGrpcStream, req)
-	ret.grpcService = service
-	ret.grpcMethod = method
+	ret := newActivity(req)
+	ret.SetProp(PropGrpcType, PropGrpcTypeStream)
+	ret.SetProp(PropGrpcService, service)
+	ret.SetProp(PropGrpcMethod, method)
 	return ret
 }
 
-func (a *Activity) SetProps(props map[string]any) {
+func (a *Activity) SetProps(props map[string]string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for k, v := range props {
@@ -70,56 +74,81 @@ func (a *Activity) SetProps(props map[string]any) {
 	}
 }
 
-func (a *Activity) SetProp(key string, value any) {
+func (a *Activity) SetProp(key string, value string) {
+	if a == nil {
+		return
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.props[key] = value
 }
 
-func (a *Activity) ToProto() *diveContracts.Activity {
-	var err error
-	var reqPb *anypb.Any
-	if pm, ok := a.req.(proto.Message); ok {
-		reqPb, err = anypb.New(pm)
-		if err != nil {
-			tmp, _ := structpb.NewStruct(map[string]any{"error": "failed to convert request to anyPb"})
-			reqPb, _ = anypb.New(tmp)
-		}
-	} else {
-		tmp, _ := structpb.NewStruct(map[string]any{"error": "request is not proto.Message"})
-		reqPb, _ = anypb.New(tmp)
-	}
+func (a *Activity) ID() string {
+	return a.id
+}
 
-	propsPb, err := structpb.NewStruct(a.props)
-	if err != nil {
-		propsPb, _ = structpb.NewStruct(map[string]any{"error": "failed to convert props to structPb"})
-	}
+func (a *Activity) StartedAt() time.Time {
+	return a.startedAt
+}
 
-	ret := &diveContracts.Activity{
-		Type:        a.t.ToProto(),
-		Id:          a.id.String(),
-		StartedAt:   timestamppb.New(a.startedAt),
-		Duration:    durationpb.New(time.Since(a.startedAt)),
-		Request:     reqPb,
-		Props:       propsPb,
-		GrpcService: a.grpcService,
-		GrpcMethod:  a.grpcMethod,
-	}
+func (a *Activity) Duration() time.Duration {
+	return time.Since(a.startedAt)
+}
 
+func (a *Activity) SetRequest(req any) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.req = req
+}
+
+func (a *Activity) Request() any {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.req
+}
+
+func (a *Activity) Props() map[string]string {
+	ret := make(map[string]string)
+	maps.Copy(ret, a.props)
 	return ret
 }
 
-func (t Type) ToProto() diveContracts.Activity_Type {
-	switch t {
-	case ActivityTypeBackground:
-		return diveContracts.Activity_TYPE_BACKGROUND
-	case ActivityTypeGrpcUnary:
-		return diveContracts.Activity_TYPE_GRPC_UNARY
-	case ActivityTypeGrpcStream:
-		return diveContracts.Activity_TYPE_GRPC_STREAM
-	case ActivityTypeUnknown:
-		fallthrough
-	default:
-		return diveContracts.Activity_TYPE_UNKNOWN
+func (a *Activity) AddEvent(name string, ts time.Time, payload map[string]string) {
+	if a == nil {
+		return
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.events = append(a.events, Event{
+		name:      name,
+		timestamp: ts,
+		payload:   payload,
+	})
+}
+
+func (a *Activity) AddEventNow(name string, payload map[string]string) {
+	a.AddEvent(name, time.Now(), payload)
+}
+
+func (a *Activity) Events() []Event {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return slices.Clone(a.events)
+}
+
+func (e Event) ID() string {
+	return e.name
+}
+
+func (e Event) Timestamp() time.Time {
+	return e.timestamp
+}
+
+func (e Event) Payload() map[string]string {
+	ret := make(map[string]string)
+	maps.Copy(ret, e.payload)
+	return ret
 }
