@@ -111,6 +111,8 @@ func (a *Activity) Request() any {
 }
 
 func (a *Activity) Props() map[string]string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	ret := make(map[string]string)
 	maps.Copy(ret, a.props)
 	return ret
